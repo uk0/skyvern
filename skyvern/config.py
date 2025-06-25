@@ -246,6 +246,9 @@ class Settings(BaseSettings):
     VERIFICATION_CODE_INITIAL_WAIT_TIME_SECS: int = 40
     VERIFICATION_CODE_POLLING_TIMEOUT_MINS: int = 15
 
+    # Captcha solver settings
+    CAPTCHA_O3_PRO_MODEL_PATH: str | None = None
+
     # Bitwarden Settings
     BITWARDEN_CLIENT_ID: str | None = None
     BITWARDEN_CLIENT_SECRET: str | None = None
