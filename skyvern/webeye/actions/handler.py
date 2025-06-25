@@ -465,12 +465,50 @@ async def handle_solve_captcha_action(
     task: Task,
     step: Step,
 ) -> list[ActionResult]:
-    LOG.warning(
-        "Please solve the captcha on the page, you have 30 seconds",
-        action=action,
-    )
-    await asyncio.sleep(30)
-    return [ActionSuccess()]
+    """Attempt to automatically solve captcha using ddddocr."""
+    try:
+        try:
+            import ddddocr  # type: ignore
+        except Exception as e:  # pragma: no cover - optional dependency
+            LOG.warning("ddddocr is not installed", error=str(e))
+            raise
+
+        dom = DomUtil(scraped_page=scraped_page, page=page)
+        screenshot_bytes: bytes
+        input_element = None
+        if action.element_id:
+            skyvern_element = await dom.get_skyvern_element_by_id(action.element_id)
+            screenshot_bytes = await skyvern_element.get_locator().screenshot(
+                timeout=settings.BROWSER_SCREENSHOT_TIMEOUT_MS
+            )
+            input_element = skyvern_element
+        else:
+            screenshot_bytes = await page.screenshot(
+                timeout=settings.BROWSER_SCREENSHOT_TIMEOUT_MS
+            )
+
+        model_path = settings.CAPTCHA_O3_PRO_MODEL_PATH
+        if model_path:
+            ocr = ddddocr.DdddOcr(show_ad=False, import_onnx_path=model_path)
+        else:
+            ocr = ddddocr.DdddOcr(show_ad=False)
+        code = ocr.classification(screenshot_bytes)
+
+        if input_element:
+            await input_element.input(code)
+        else:
+            await page.keyboard.type(code)
+
+        LOG.info("Captcha solved automatically", code=code)
+        return [ActionSuccess()]
+    except Exception:
+        LOG.warning(
+            "Automatic captcha solving failed, waiting for manual solve",
+            action=action,
+            exc_info=True,
+        )
+        await asyncio.sleep(30)
+        return [ActionSuccess()]
 
 
 async def handle_click_action(
